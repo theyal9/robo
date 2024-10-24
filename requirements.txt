@@ -1,0 +1,207 @@
+opencv-python
+numpy
+tensorflow
+imutils
+matplotlib
+
+
+Project Overview
+Goal: Create a Python program that uses a camera to recognize Uno cards based on their numbers, colors, and symbols, using OpenCV and a CNN model.
+Project Structure
+css
+Copy code
+/UnoCardRecognition
+    ├── Dataset/
+    │   ├── Red_1/
+    │   │   ├── img1.jpg
+    │   │   ├── img2.jpg
+    │   ├── Green_2/
+    │   │   ├── img1.jpg
+    │   │   ├── img2.jpg
+    │   ├── Yellow_Skip/
+    │       ├── img1.jpg
+    │       ├── img2.jpg
+    ├── code/
+    │   ├── preprocess.py
+    │   ├── train_model.py
+    │   ├── recognize_card.py
+    ├── main.py
+    ├── requirements.txt
+Steps and Code
+We’ll walk through each of these files with the corresponding code.
+
+1. Setup and Installation
+Create a requirements.txt file:
+
+Copy code
+opencv-python
+numpy
+tensorflow
+imutils
+matplotlib
+Install dependencies using:
+
+bash
+Copy code
+pip install -r requirements.txt
+2. Create the Dataset Directory
+Organize your dataset directory with images as shown in the project structure. Label each directory by card name.
+
+3. Image Preprocessing (preprocess.py)
+python
+Copy code
+# preprocess.py
+import cv2
+import numpy as np
+
+def preprocess_image(img_path):
+    # Read image from the path
+    img = cv2.imread(img_path)
+    # Resize image to 128x128 for consistency
+    resized = cv2.resize(img, (128, 128))
+    # Normalize image pixels
+    normalized = resized / 255.0
+    return normalized
+
+def find_card_contours(img):
+    # Convert image to grayscale
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # Apply GaussianBlur to reduce noise and improve contour detection
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    # Detect edges using Canny edge detection
+    edged = cv2.Canny(blurred, 50, 150)
+    # Find contours
+    contours, _ = cv2.findContours(edged, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    for contour in contours:
+        # Approximate the contour and check if it's rectangular
+        approx = cv2.approxPolyDP(contour, 0.02 * cv2.arcLength(contour, True), True)
+        if len(approx) == 4:
+            x, y, w, h = cv2.boundingRect(approx)
+            card_img = img[y:y+h, x:x+w]
+            return card_img
+    return None
+4. Model Training (train_model.py)
+python
+Copy code
+# train_model.py
+import tensorflow as tf
+from tensorflow.keras import layers, models
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+
+def create_cnn_model():
+    model = models.Sequential([
+        layers.Conv2D(32, (3, 3), activation='relu', input_shape=(128, 128, 3)),
+        layers.MaxPooling2D((2, 2)),
+        layers.Conv2D(64, (3, 3), activation='relu'),
+        layers.MaxPooling2D((2, 2)),
+        layers.Conv2D(128, (3, 3), activation='relu'),
+        layers.MaxPooling2D((2, 2)),
+        layers.Flatten(),
+        layers.Dense(128, activation='relu'),
+        layers.Dense(10, activation='softmax')  # Adjust number of classes based on your dataset
+    ])
+    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    return model
+
+def train_model():
+    # Create an image data generator for training
+    train_datagen = ImageDataGenerator(rescale=1.0/255.0)
+    
+    train_data = train_datagen.flow_from_directory(
+        'Dataset/', target_size=(128, 128), batch_size=32, class_mode='categorical')
+
+    model = create_cnn_model()
+    model.fit(train_data, epochs=10)
+    model.save('uno_card_model.h5')
+
+if __name__ == "__main__":
+    train_model()
+5. Card Recognition Script (recognize_card.py)
+python
+Copy code
+# recognize_card.py
+import cv2
+import numpy as np
+import tensorflow as tf
+from preprocess import preprocess_image, find_card_contours
+
+def recognize_card(model_path, img_path):
+    # Load pre-trained model
+    model = tf.keras.models.load_model(model_path)
+    
+    # Preprocess and find contours of the card
+    card_img = preprocess_image(img_path)
+    if card_img is not None:
+        # Reshape image to match the model input
+        card_img = card_img.reshape(1, 128, 128, 3)
+        # Predict card
+        prediction = model.predict(card_img)
+        return np.argmax(prediction)
+
+if __name__ == "__main__":
+    model_path = 'uno_card_model.h5'
+    img_path = 'path/to/your/card/image.jpg'
+    card_type = recognize_card(model_path, img_path)
+    print(f"Recognized Card: {card_type}")
+6. Main Script (main.py)
+python
+Copy code
+# main.py
+import cv2
+from recognize_card import recognize_card
+from preprocess import find_card_contours
+
+def capture_card_image(camera_index=0):
+    cap = cv2.VideoCapture(camera_index)
+    
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        
+        card_img = find_card_contours(frame)
+        if card_img is not None:
+            # Display detected card region
+            cv2.imshow('Detected Card', card_img)
+            
+            # Wait for user to press 's' to save image and predict
+            if cv2.waitKey(1) & 0xFF == ord('s'):
+                cv2.imwrite('captured_card.jpg', card_img)
+                break
+
+    cap.release()
+    cv2.destroyAllWindows()
+    return 'captured_card.jpg'
+
+if __name__ == "__main__":
+    # Capture image from the camera
+    img_path = capture_card_image()
+    
+    # Recognize the card from the captured image
+    recognized_card = recognize_card('uno_card_model.h5', img_path)
+    print(f"Recognized Card: {recognized_card}")
+Explanation of Workflow
+Preprocessing (preprocess.py):
+
+Preprocess images and find card contours.
+Model Training (train_model.py):
+
+Define and train a CNN model using ImageDataGenerator on the dataset.
+Recognition (recognize_card.py):
+
+Load the trained model and recognize the captured card.
+Main Program (main.py):
+
+Capture an image using a camera and use the recognition module to identify the card.
+Instructions to Run
+Prepare the Dataset: Ensure you have the dataset organized in the correct directory structure (/Dataset).
+Train the Model:
+bash
+Copy code
+python train_model.py
+Run the Main Program:
+bash
+Copy code
+python main.py
+This setup allows your robot to detect, preprocess, and recognize Uno cards using a trained CNN model. Let me know if you need more details or modifications!
