@@ -17,15 +17,16 @@ card_names = [
 # Function to save an image with the proper name in the correct folder
 def save_image(folder_name, img_name, image):
     folder_path = os.path.join(os.getcwd(), folder_name)
-    if not os.path.exists(folder_path):
-        os.makedirs(folder_path)
+    os.makedirs(folder_path, exist_ok=True)  # Ensure the folder is created
     img_path = os.path.join(folder_path, img_name)
-    cv2.imwrite(img_path, image)
-    print(f"Saved {img_name} in {folder_name}")
+    if cv2.imwrite(img_path, image):
+        print(f"Saved {img_name} in {folder_path}")
+    else:
+        print(f"Error: Could not save {img_name} in {folder_path}")
 
 def main():
-    # Initialize the webcam (use 1 for external webcam, 0 for internal)
-    cap = cv2.VideoCapture(1)  # Change 1 to 0 if internal webcam is to be used
+    # Initialize the webcam (try changing to 0 if using an internal webcam)
+    cap = cv2.VideoCapture(1)  # Change to 0 if you are using an internal webcam
 
     if not cap.isOpened():
         print("Error: Could not open webcam.")
@@ -46,21 +47,25 @@ def main():
 
         # Check for key press
         key = cv2.waitKey(1) & 0xFF
-        if key == ord('c'):  # 'c' key to capture and save the image
+        if key == ord('c'):  # Press 'c' to capture and save the image
             if card_index < len(card_names):
-                folder_name = f"folder{image_count}"
-                img_name = f"{card_names[card_index]}.png"
+                folder_name = f"{card_names[card_index]}"
+                img_name = f"{card_names[card_index]}124.png"
+                print(f"Attempting to save {img_name} in folder {folder_name}...")
+                
+                # Attempt to save the image
                 save_image(folder_name, img_name, frame)
+                
                 card_index += 1
 
                 if card_index == len(card_names):
                     card_index = 0  # Reset after the last card
-                    image_count += 1  # Move to next folder for subsequent images
+                    image_count += 1  # Move to the next folder for subsequent images
             else:
                 print("All cards have been saved.")
                 break
 
-        elif key == ord('q'):  # 'q' key to quit the application
+        elif key == ord('q'):  # Press 'q' to quit the application
             print("Exiting...")
             break
 
